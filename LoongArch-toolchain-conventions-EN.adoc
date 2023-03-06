@@ -1,0 +1,759 @@
+= Toolchain Conventions of the LoongArch™ Architecture
+Version 1.1
+Copyright © Loongson Technology 2023-2024. All rights reserved.
+:doctype: article
+:title-page:
+:icons: font
+:toc: macro
+:toclevels: 3
+:toctitle:
+
+== Preamble
+
+This is the official documentation of the toolchain conventions of
+the LoongArch™ Architecture.
+
+The latest releases of this document are available at
+https://github.com/loongson/la-toolchain-conventions and are licensed under
+the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
+(CC BY-NC-ND 4.0) License.
+
+To view a copy of this license, visit
+http://creativecommons.org/licenses/by-nc-nd/4.0/
+or send a letter to Creative Commons, PO Box 1866, Mountain View,
+CA 94042, USA.
+
+This specification is written in both English and Chinese. In the event of any
+inconsistency between the same document version in two languages, the Chinese
+version shall prevail.
+
+NOTE: In this document, the terms "architecture", "instruction set architecture"
+and "ISA" are used synonymously to refer to a certain set of instructions and
+the set of registers they can operate upon.
+
+== Version History
+
+[%header,cols="^2,8"]
+|====
+|Version
+^|Description
+
+|1.0
+|initial version, separated from the original __LoongArch Documentation__ repo.
+
+|1.1
+|update the ISA description to include LoongArch v1.1;
+introduce the ISA versioning scheme for binary distributions.
+|====
+
+toc::[]
+
+
+== Compiler Options
+
+=== Rationale
+
+Compiler options that are specific to LoongArch should denote a change
+in the following compiler settings:
+
+- *Target architecture*: the allowed set of instructions and registers
+to be used by the compiler.
+
+- *Target ABI type*: the data model and calling conventions.
+
+- *Target microarchitecture*: microarchitectural features that guide
+compiler optimizations.
+
+- *Linking optimizations*: code model selection and linker relaxation.
+
+=== List
+
+Below is the current list of all LoongArch-specific compiler options that
+are supported by a fully conforming compiler. The list will be updated
+as more LoongArch features are developed and implemented.
+
+.LoongArch-specific compiler options
+[%header,cols="^2m,^2,^5,^2"]
+|===
+|Option
+|Possible values
+|Description
+|Note
+
+|-march=
+|`native` `la64v1.0` `la64v1.1` `loongarch64` `la464` `la664`
+|Select the target architecture, i.e.
+the basic collection of enabled <<feature-subsets,ISA feature subsets>>.
+|
+
+|-mtune=
+|`native` `generic` `loongarch64` `la464` `la664`
+|Select the target microarchitecture, default to the value of `-march=`
+or `generic` if that is not possible.
+|
+
+|-mabi=
+|`lp64d` `lp64f` `lp64s` `ilp32d` `ilp32f` `ilp32s`
+|Select the base ABI type.
+|
+
+|-mfpu=
+|`64` `32` `0` `none` (equivalent to `0`)
+|Select the allowed set of basic floating-point instructions and registers.
+This option should not change the FP calling convention unless it is <<abi-fallback,necessary>>.
+(The implementation of this option is not mandatory. It is recommended to use
+`-m*-float` options in software projects and scripts.)
+|
+
+|-msimd=
+|`none` `lsx` `lasx`
+|Select the SIMD extension(s) to be enabled.
+|`lasx` implies `lsx`
+
+
+|-mcmodel=
+|`normal` `medium` `extreme`
+|Select the code model for computing global references.
+|
+
+|-mrelax
+|`-m[no-]relax`
+|Generate assembly code for linker relaxation.
+|
+
+|-mstrict-align
+|`-m[no-]strict-align`
+|Do not generate unaligned memory accesses.
+Useful for targets that do not support unaligned memory access.
+|
+
+
+|-msoft-float
+|
+|Prevent the compiler from generating hardware floating-point instructions,
+and adjust the selected base ABI type to use soft-float calling convention.
+(The adjusted base ABI identifier should have suffix `s`.)
+|
+
+|-msingle-float
+|
+|Enable generation of 32-bit floating-point instructions,
+and adjust the selected base ABI type to use 32-bit FP calling convention.
+(The adjusted base ABI identifier should have suffix `f`.)
+|
+
+|-mdouble-float
+|
+|Enable generation of 32- and 64-bit floating-point instructions.
+and adjust the selected base ABI type to use 64-bit FP calling convention.
+(The adjusted base ABI identifier should have suffix `d`.)
+|
+
+|-mlsx
+|`-m[no-]lsx`
+|Enable LSX (128-bit) SIMD instructions.
+|
+
+|-mlasx
+|`-m[no-]lasx`
+|Enable LASX (256-bit) SIMD instructions.
+|
+
+|-mfrecipe
+|`-m[no-]frecipe`
+|Enable generating approximate reciprocal divide and square root instructions
+(`frecipe.{s/d}` and `frsqrte.{s/d}`).
+|LoongArch V1.1
+
+|-mdiv32
+|`-m[no-]div32`
+|Assume `div.w[u]` and `mod.w[u]` can handle inputs that are not sign-extended.
+|LoongArch V1.1
+
+|-mlam-bh
+|`-m[no-]lam-bh`
+|Enable atomic operations `am{swap/add}[_db].{b/h}`.
+|LoongArch V1.1
+
+|-mlamcas
+|`-m[no-]lamcas`
+|Enable atomic compare-and-swap instructions `amcas[_db].{b/h/w/d}`.
+|LoongArch V1.1
+
+|-mld-seq-sa
+|`-m[no-]ld-seq-sa`
+|Assume no hardware reordering between load operations at the same address.
+In this case, do not generate load-load barrier instructions (`dbar 0x700`).
+|LoongArch V1.1
+
+|===
+
+NOTE: Valid parameter values of `-march=` and `-mtune=` options should correspond to
+actual LoongArch processor models, IP cores, product families or ISA versions.
+
+For one compilation command, the effective order of all LoongArch-specific
+compiler options is computed with the following general rules:
+
+1. Within each category in the above tables, only the last-seen option
+   is effective (`-m*-float` falls into the same category).
+2. `-march=` and `-mabi=` always precede other options.
+3. On the basis of rule 1 and 2, any options with parameters
+   (i.e. with `=`) precedes all options without parameters.
+4. If the above rule failed to determine the effective order between
+   two options, unless specified by the following table, they should
+   have independent meanings. (i.e. the effective order between them
+   does not affect the compiler's final configuration)
+
+.Special processing rules for certain compiler option combinations
+[%header,cols="^2m,^2,^4"]
+|===
+|Option combination
+|Compiler behavior
+|Description
+
+|-mfpu=[none\|0\|32] [-ml[a]sx\|-msimd=l[a]sx]
+.2+|Abort
+.2+|The 64-bit FPU must be present with any SIMD extensions.
+
+|-m[soft\|single]-float [-ml[a]sx\|-msimd=l[a]sx]
+
+|-mlasx -mno-lasx
+|In this particular order, the two options are cancelled out.
+|If LSX was previously disabled by `-march=`, `-msimd=`, `-mno-lsx`
+or the compiler's default settings, it should still be disabled.
+|===
+
+The compiler should reach the final target configuration by applying
+the options in their effective order. Options that appears later in
+the order can override existing configurations.
+
+The following sections will cover the details of
+the target ISA / ABI configuration items.
+
+=== Configuring the Target ISA
+
+[[feature-subsets]]
+Certain features of the LoongArch ISA may evolve independently and combine freely
+in processor implementations. To support the possible variations of a LoongArch target
+with a consistent model, we make a modular abstraction of the target ISA, where
+an ISA implementation can always be identified as a combination of __feature subsets__.
+
+The feature subsets are divided into two categories: __base architectures__ and
+__ISA extensions__.  A base architecture is the core component of the target ISA,
+which defines the basic integer and floating-point operations, and an __ISA extension__
+may represent either the base of an extended ISA component or added features in an update.
+
+<<target-presets,The possible values of the `-march=` parameters>> are some meaningful
+combinations of the ISA feature subsets. It is recommended to specify `-march=` first
+when composing compiler options for a given target platform.
+
+image::compiler-isa-config-model-EN.svg[]
+
+The compiler should at least implement one ISA configuration represented by an
+`-march=` parameter value, which includes a base architecture and a number of
+ISA extensions. The compiler options that relates to the control of these
+extensions should also be implemented. For unimplemented combinations of these
+options, the compiler may abort.
+
+.Base Architecture
+[%header,cols="^2,^1,^5"]
+|===
+|Name
+|Symbol
+|Description
+
+|LoongArch64 base architecture
+|`la64`
+|ISA defined in __LoongArch Reference Manual - Volume 1: Basic Architecture__ v1.00.
+|===
+
+The following table lists all ISA extensions that should be abstracted by the compiler
+and the options that enable/disable them.
+
+.ISA extensions
+[%header,cols="^2,^1,^2,^5"]
+|===
+|Name
+|Symbol
+|Related option(s)
+|Description of the option(s)
+
+|Basic Floating-Point Processing Unit
+.^|`fpu64` `fpu32` `fpunone`
+.^|`-mfpu=[none\|32\|64]`
+|Selects the allowed set of basic floating-point instructions
+and floating-point registers. This is part of the base
+architecture, where it gets its default value, but may be
+adjusted independently.
+
+|Loongson SIMD extension
+.^|`lsx`
+.^|`-m[no-]lsx`
+|Allow or do not allow generating LSX 128-bit SIMD instructions.
+Enabling `lsx` requires `fpu64`.
+
+|Loongson Advanced SIMD extension
+.^|`lasx`
+.^|`-m[no-]lasx`
+|Allow or do not allow generating LASX 256-bit SIMD instructions.
+Enabling `lasx` requires `lsx`.
+
+|LoongArch V1.1 features
+.^|`v1.1`
+|`-m[no-]div32` +
+`-m[no-]frecipe` +
+`-m[no-]lam-bh` +
+`-m[no-]lamcas` +
+`-m[no-]ld-seq-sa`
+|Enable or disable features introduced by LoongArch V1.1.
+The LSX / LASX part of the LoongArch v1.1 update should only be
+enabled with `lsx` / `lasx` itself enabled.
+|===
+
+[[target-presets]]
+The following table list the targets that represents specific
+LoongArch hardware with microarchitectural features to optimize
+for. These are valid parameters to either `-march=` or `-mtune=`.
+
+.Targets representing specific hardware
+[%header,cols="^2,^2,^2"]
+|===
+|Name (`-march` parameter)
+|ISA feature subsets
+|Target of optimization
+
+|`native`
+|auto-detected +
+(native compilers only)
+|auto-detected microarchitecture model / features
+
+|`loongarch64`
+|`la64` [`fpu64`]
+|Generic LoongArch 64-bit (LA64) processors
+
+|`la464`
+|`la64` [`fpu64` `lsx` `lasx`]
+|LA464 processor core
+
+|`la664`
+|`la64` [`fpu64` `lsx` `lasx` `v1.1`]
+|LA664 processor core
+|===
+
+Using the namespace of `-march=` targets, we also define a versioning scheme
+to promote binary compatibility between LoongArch programs and implementations.
+In addition to the IP core / product model names, __ISA versions__ can also be
+the parameter of `-march=` options, which are tags that identify sets of
+commonly agreed ISA features to be implemented by the processors and used by
+the software. It is advisable to use `-march=<ISA version>` as the only
+compiler option to describe the target ISA when building binary distributions
+of software.
+
+.ISA version targets
+[%header,cols="^1,^1,^1"]
+|===
+|Name (`-march=` parameter)
+|ISA feature subsets
+|Version number (major.minor)
+
+|`la64v1.0`
+|`la64` [`fpu64` `lsx`]
+|`1.0`
+
+|`la64v1.1`
+|`la64` [`fpu64` `lsx` `v1.1`]
+|`1.1`
+|===
+
+[[abi-types]]
+=== Configuring the Target ABI
+
+Like configuring the target ISA, a complete ABI configuration of LoongArch
+consists of two parts, the *base ABI* and the *ABI extension*. The former
+describes the data model and calling convention in general, while the latter
+denotes an overall adjustment to the base ABI, which may require support
+from certain ISA extensions.
+
+Please be noted that there is only ONE ABI extension slot in an ABI
+configuration. They do not combine with one another,
+and are, in principle, mutually incompatible.
+
+A new ABI extension type will not be added to this document unless
+it implies certain significant performance / functional advantage
+that no compiler optimization techniques can provide without
+altering the ABI.
+
+There are six base ABI types, whose standard names are the same as
+the `-mabi` values that select them. The compiler may choose to implement
+one or more of these base ABI types, possibly according to the range of
+implemented target ISA variants.
+
+.Base ABI Types
+[%header,cols="^1,^1,^1"]
+|===
+|Standard name  |Data model
+|Bit-width of argument / return value GPRs / FPRs
+|`lp64d`        |LP64       |64 / 64
+|`lp64f`        |LP64       |64 / 32
+|`lp64s`        |LP64       |64 / (none)
+|`ilp32d`       |ILP32      |32 / 64
+|`ilp32f`       |ILP32      |32 / 32
+|`ilp32s`       |ILP32      |32 / (none)
+|===
+
+The following table lists all ABI extension types and
+related compiler options. A compiler may choose to implement
+any subset of these extensions that contains `base`.
+
+The default ABI extension type is `base` when referring to
+an ABI type with only the "base" component.
+
+.ABI Extension Types
+[%header,cols="^1,^1,^1"]
+|===
+|Name
+|Compiler options
+|Description
+
+|`base`
+|(none)
+|conforms to the https://loongson.github.io/LoongArch-Documentation/LoongArch-ELF-ABI-EN.html[LoongArch ELF psABI]
+|===
+
+[[default-arch-abi]]
+The compiler should know the default ABI to use during its build time.
+If the ABI extension type is not explicitly configured,
+`base` should be used.
+
+In principle, the target ISA configuration should not affect the decision
+of the target ABI. When certain ISA feature required by explicit
+(i.e. from the compiler's command-line arguments) ABI configuration
+cannot be met due constraints imposed by ISA options, the compiler should
+abort with an error message to complain about the conflict.
+
+When the ABI is not fully constrained by the compiler options, the default
+configuration of either the base ABI or the ABI extension, whichever is missing
+from the command line, should be attempted. If this default ABI setting
+cannot be implemented by the explicitly configured target ISA, the expected
+behavior is *undefined* since the user is encouraged to specify which
+ABI to use when choosing a smaller instruction set than the default.
+
+[[abi-fallback]]
+In this case, it is suggested that the compiler should abort with
+an error message, however, for user-friendliness, it may also choose
+to ignore the default base ABI or ABI extension and select a viable
+fallback ABI for the currently enabled ISA feature subsets with caution.
+It is also recommended that the compiler should notify the user about the
+ABI change, optionally with a compiler warning.
+For example, passing `-mfpu=none` as the only command-line argument
+may cause a compiler configured with `lp64d` / `base` default ABI
+to automatically select `lp64s` / `base` instead.
+
+When the target ISA configuration cannot be uniquely decided from the given
+compiler options, the implementation-defined default values should be consulted first.
+If the default ISA setting is insufficient for implementing the ABI configuration,
+the compiler should try enabling the missing ISA feature subsets according to the
+following table, as long as they are not explicitly disabled or excluded from usage.
+
+.Minimal architecture requirements for implementing each ABI type.
+[%header,cols="^1,^1,^1"]
+|===
+|Base ABI type
+|ABI extension type
+|Minimal required ISA feature subsets
+
+|`lp64d`
+|`base`
+|`la64` [`fpu64`]
+
+|`lp64f`
+|`base`
+|`la64` [`fpu32`]
+
+|`lp64s`
+|`base`
+|`la64` [`fpunone`]
+|===
+
+== GNU Target Triplets and Multiarch Specifiers
+
+*Target triplet* is a core concept in the GNU build system.
+It describes a platform on which the code runs and mostly consists of three fields:
+the CPU family / model (`machine`), the vendor (`vendor`), and the operating
+system name (`os`).
+
+*Multiarch architecture apecifiers* are essentially standard directory names
+where libraries are installed on a multiarch-flavored filesystem.
+These strings are normalized GNU target triplets. See
+https://wiki.debian.org/Multiarch/Tuples[debian documentation] for details.
+
+This document recognizes the following `machine` strings
+for the GNU triplets of LoongArch:
+
+[[machine-strings]]
+.LoongArch `machine` strings
+[%header,cols="^1,^2"]
+|===
+|`machine`
+|Description
+
+|`loongarch64`
+|LA64 base architecture (implies `lp64*` ABI)
+
+|`loongarch32`
+|LA32 base architecture (implies `ilp32*` ABI)
+|===
+
+As standard library directory names, the canonical multiarch architecture specifiers
+of LoongArch should contain information about the ABI type of the libraries
+that are meant to be released in the binary form and installed there.
+
+While the integer base ABI is <<machine-strings, implied by the `machine` field>>,
+the floating-point base ABI and the ABI extension type are encoded
+with two string suffices (`<fabi-suffix><abiext-suffix>`) to the `os` field of the
+specifier, respectively.
+
+.List of possible `<fabi-suffix>`
+[%header,cols="^1,^2"]
+|===
+|`<fabi-suffix>` |Description
+|(empty string)  |The base ABI uses 64-bit FPRs for parameter passing. (`lp64d`)
+|`f32`           |The base ABI uses 32-bit FPRs for parameter passing. (`lp64f`)
+|`sf`            |The base ABI uses no FPR for parameter passing. (`lp64s`)
+|===
+
+.List of possible `<abiext-suffix>`
+[%header,cols="^1,^2"]
+|===
+|`<abiext-suffix>`    |ABI extension type
+|(empty string)       |`base`
+|===
+
+.List of LoongArch mulitarch specifiers
+[%header,cols="^2,^1,^1,^2"]
+|===
+|ABI type +
+(Base ABI / ABI extension)
+|C Library | Kernel
+|Multiarch specifier
+
+|`lp64d` / `base`
+| glibc | Linux
+|`loongarch64-linux-gnu`
+
+|`lp64f` / `base`
+| glibc | Linux
+|`loongarch64-linux-gnuf32`
+
+|`lp64s` / `base`
+| glibc | Linux
+|`loongarch64-linux-gnusf`
+
+|`lp64d` / `base`
+| musl libc | Linux
+|`loongarch64-linux-musl`
+
+|`lp64f` / `base`
+| musl libc | Linux
+|`loongarch64-linux-muslf32`
+
+|`lp64s` / `base`
+| musl libc | Linux
+|`loongarch64-linux-muslsf`
+|===
+
+== C/C++ Preprocessor Built-in Macro Definitions
+
+.LoongArch-specific C/C++ Built-in Macros
+[%header,cols="^2,^1,^3"]
+|===
+|Name
+|Possible Values
+|Description
+
+|`\\__loongarch__`
+|`1`
+|Defined if the target is LoongArch.
+
+|`__loongarch_grlen`
+|`64`
+|Bit-width of general purpose registers.
+
+|`__loongarch_frlen`
+|`0` `32` `64`
+|Bit-width of floating-point registers (`0` if there is no FPU).
+
+|`__loongarch_arch`
+|`"loongarch64"` `"la464"` `"la664"` `"la64v1.0"` `"la64v1.1"`
+|Target ISA preset as specified by `-march=`.
+If `-march=` is not present, an implementation-defined default value should be
+used. If `-march=native` is enabled (user-specified or the default value),
+the result is automatically detected by the compiler.
+
+|`__loongarch_tune`
+|`"generic"` `"loongarch64"` `"la464"` `"la664"`
+|Processor model as specified by `-mtune` or its default value.
+If `-mtune=native` is enabled (either explicitly given or set with
+`-march=native`), the result is automatically detected by the compiler.
+
+|`__loongarch_lp64`
+|`1` or undefined
+|Defined if ABI uses the LP64 data model and 64-bit GPRs for parameter passing.
+
+|`__loongarch_hard_float`
+|`1` or undefined
+|Defined if floating-point/extended ABI type is `single` or `double`.
+
+|`__loongarch_soft_float`
+|`1` or undefined
+|Defined if floating-point/extended ABI type is `soft`.
+
+|`__loongarch_single_float`
+|`1` or undefined
+|Defined if floating-point/extended ABI type is `single`.
+
+|`__loongarch_double_float`
+|`1` or undefined
+|Defined if floating-point/extended ABI type is `double`.
+
+|`__loongarch_sx`
+|`1` or undefined
+|Defined if the compiler enables the `lsx` ISA extension.
+
+|`__loongarch_asx`
+|`1` or undefined
+|Defined if the compiler enables the `lasx` ISA extension.
+
+|`__loongarch_simd_width`
+|`128` `256` or undefined
+|The maximum SIMD bit-width enabled by the compiler.
+(`128` for `lsx`, and `256` for `lasx`)
+
+|`__loongarch_frecipe`
+|`1` or undefined
+|Defined if `-mfrecipe` is enabled.
+
+|`__loongarch_div32`
+|`1` or undefined
+|Defined if `-mdiv32` is enabled.
+
+|`__loongarch_lam_bh`
+|`1` or undefined
+|Defined if `-mlam-bh` is enabled.
+
+|`__loongarch_lamcas`
+|`1` or undefined
+|Defined if `-mlamcas` is enabled.
+
+|`__loongarch_ld_seq_sa`
+|`1` or undefined
+|Defined if `-mld-seq-sa` is enabled.
+
+|`__loongarch_version_major`
+|`1` or undefined
+|The minimally required LoongArch ISA version (major) to run the compiled program.
+Undefined if no such version is known to the compiler.
+
+|`__loongarch_version_minor`
+|`0` `1` or undefined
+|The minimally required LoongArch ISA version (minor) to run the compiled program.
+Undefined if and only if `__loongarch_version_major` is undefined.
+|===
+
+The non-loongarch-specific macros listed below may also be helpful when composing
+code that need to differentiate between ABIs in an architecture-agnostic manner.
+
+.Non-LoongArch-specific C/C++ Built-in Macros
+[%header,cols="^1,^3"]
+|===
+|Name
+|Description
+
+|`\\__BYTE_ORDER__`
+|Byte order
+
+|`\\__FLOAT_WORD_ORDER__`
+|Byte order for floating-point data
+
+|`\\__LP64__` `_LP64`
+|Whether the ABI passes arguments in 64-bit GPRs and uses the `LP64` data model
+
+|`\\__SIZEOF_SHORT__`
+|Width of C/C++ `short` type, in bytes
+
+|`\\__SIZEOF_INT__`
+|Width of C/C++ `int` type, in bytes
+
+|`\\__SIZEOF_LONG__`
+|Width of C/C++ `long` type, in bytes
+
+|`\\__SIZEOF_LONG_LONG__`
+|Width of C/C++ `long long` type, in bytes
+
+|`\\__SIZEOF_INT128__`
+|Width of C/C++ `__int128` type, in bytes
+
+|`\\__SIZEOF_POINTER__`
+|Width of C/C++ pointer types, in bytes
+
+|`\\__SIZEOF_PTRDIFF_T__`
+|Width of C/C++ `ptrdiff_t` type, in bytes
+
+|`\\__SIZEOF_SIZE_T__`
+|Width of C/C++ `size_t` type, in bytes
+
+|`\\__SIZEOF_WINT_T__`
+|Width of C/C++ `wint_t` type, in bytes
+
+|`\\__SIZEOF_WCHAR_T__`
+|Width of C/C++ `wchar_t` type, in bytes
+
+|`\\__SIZEOF_FLOAT__`
+|Width of C/C++ `float` type, in bytes
+
+|`\\__SIZEOF_DOUBLE__`
+|Width of C/C++ `double` type, in bytes
+
+|`\\__SIZEOF_LONG_DOUBLE__`
+|Width of C/C++ `long double` type, in bytes
+|===
+
+The following built-in macro definitions are listed for compatibility
+with legacy code. New programs should not assume existence of these macros,
+and a conforming compiler may choose to implement none or all them.
+
+.C/C++ Built-in Macros Provided for Compatibility with Legacy Code
+[%header,cols="^1,^1,^2"]
+|===
+|Name
+|Equivalent to
+|Description
+
+|`__loongarch64`
+|`__loongarch_grlen == 64`
+|Defined iff `__loongarch_grlen == 64`.
+
+|`_LOONGARCH_ARCH`
+|`__loongarch_arch`
+|
+
+|`_LOONGARCH_TUNE`
+|`__loongarch_tune`
+|
+
+|`_LOONGARCH_SIM`
+|
+|Data model of the current ABI. Possible values are `_ABILP64` (LP64 data model) and `_ABILP32` (ILP32 data model).
+
+|`_LOONGARCH_SZINT`
+|`\\__SIZEOF_INT__` multiplied by 8
+|Size of the `int` data type in bits.
+
+|`_LOONGARCH_SZLONG`
+|`\\__SIZEOF_LONG__` multiplied by 8
+|Size of the `long` data type in bits.
+
+|`_LOONGARCH_SZPTR`
+|`\\__SIZEOF_POINTER__` multiplied by 8
+|Size of the pointers in bits.
+|===
