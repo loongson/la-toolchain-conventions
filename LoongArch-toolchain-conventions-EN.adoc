@@ -1,6 +1,6 @@
 = Toolchain Conventions of the LoongArch™ Architecture
-Version 1.1
-Copyright © Loongson Technology 2023-2024. All rights reserved.
+Version 1.2
+Copyright © Loongson Technology 2023-2025.
 :doctype: article
 :title-page:
 :icons: font
@@ -44,6 +44,9 @@ the set of registers they can operate upon.
 |1.1
 |update the ISA description to include LoongArch v1.1;
 introduce the ISA versioning scheme for binary distributions.
+
+|1.2
+|add 32-bit LoongArch related conventions.
 |====
 
 toc::[]
@@ -81,15 +84,15 @@ as more LoongArch features are developed and implemented.
 |Note
 
 |-march=
-|`native` `la64v1.0` `la64v1.1` `loongarch64` `la464` `la664`
+|`native` `la64v1.0` `la64v1.1` `loongarch64` `la464` `la664` `la32v1.0` `la32rv1.0`
 |Select the target architecture, i.e.
 the basic collection of enabled <<feature-subsets,ISA feature subsets>>.
 |
 
 |-mtune=
-|`native` `generic` `loongarch64` `la464` `la664`
+|`native` `generic` `loongarch64` `la464` `la664` `loongarch32`
 |Select the target microarchitecture, default to the value of `-march=`
-or `generic` if that is not possible.
+or an implementation-defined default if that is not possible.
 |
 
 |-mabi=
@@ -265,6 +268,14 @@ options, the compiler may abort.
 |LoongArch64 base architecture
 |`la64`
 |ISA defined in __LoongArch Reference Manual - Volume 1: Basic Architecture__ v1.00.
+
+|LoongArch32 base architecture
+|`la32`
+|ISA defined in __LoongArch Reference Manual - Volume 1: Basic Architecture__ v1.00.
+
+|LoongArch32 reduced base architecture
+|`la32r`
+|ISA defined in __LoongArch Architecture 32-bit Reduced Reference Manual__ v1.04.
 |===
 
 The following table lists all ISA extensions that should be abstracted by the compiler
@@ -280,7 +291,7 @@ and the options that enable/disable them.
 
 |Basic Floating-Point Processing Unit
 .^|`fpu64` `fpu32` `fpunone`
-.^|`-mfpu=[none\|32\|64]`
+.^|`-mfpu=[64\|32\|none]`
 |Selects the allowed set of basic floating-point instructions
 and floating-point registers. This is part of the base
 architecture, where it gets its default value, but may be
@@ -318,14 +329,14 @@ for. These are valid parameters to either `-march=` or `-mtune=`.
 .Targets representing specific hardware
 [%header,cols="^2,^2,^2"]
 |===
-|Name (`-march` parameter)
+|Name (`-march=` or `-mtune=` parameter)
 |ISA feature subsets
 |Target of optimization
 
 |`native`
 |auto-detected +
 (native compilers only)
-|auto-detected microarchitecture model / features
+|Auto-detected microarchitecture model / features
 
 |`loongarch64`
 |`la64` [`fpu64`]
@@ -363,6 +374,14 @@ of software.
 |`la64v1.1`
 |`la64` [`fpu64` `lsx` `v1.1`]
 |`1.1`
+
+|`la32v1.0`
+|`la32` [`fpunone`]
+|`1.0`
+
+|`la32rv1.0`
+|`la32r` [`fpunone`]
+|`1.0`
 |===
 
 [[abi-types]]
@@ -473,6 +492,18 @@ following table, as long as they are not explicitly disabled or excluded from us
 |`lp64s`
 |`base`
 |`la64` [`fpunone`]
+
+|`ilp32d`
+|`base`
+|`la32/la32r` [`fpu64`]
+
+|`ilp32f`
+|`base`
+|`la32/la32r` [`fpu32`]
+
+|`ilp32s`
+|`base`
+|`la32/la32r` [`fpunone`]
 |===
 
 == GNU Target Triplets and Multiarch Specifiers
@@ -482,7 +513,7 @@ It describes a platform on which the code runs and mostly consists of three fiel
 the CPU family / model (`machine`), the vendor (`vendor`), and the operating
 system name (`os`).
 
-*Multiarch architecture apecifiers* are essentially standard directory names
+*Multiarch architecture specifiers* are essentially standard directory names
 where libraries are installed on a multiarch-flavored filesystem.
 These strings are normalized GNU target triplets. See
 https://wiki.debian.org/Multiarch/Tuples[debian documentation] for details.
@@ -560,11 +591,35 @@ specifier, respectively.
 |`lp64s` / `base`
 | musl libc | Linux
 |`loongarch64-linux-muslsf`
+
+|`ilp32d` / `base`
+| glibc | Linux
+|`loongarch32-linux-gnu`
+
+|`ilp32f` / `base`
+| glibc | Linux
+|`loongarch32-linux-gnuf32`
+
+|`ilp32s` / `base`
+| glibc | Linux
+|`loongarch32-linux-gnusf`
+
+|`ilp32d` / `base`
+| musl libc | Linux
+|`loongarch32-linux-musl`
+
+|`ilp32f` / `base`
+| musl libc | Linux
+|`loongarch32-linux-muslf32`
+
+|`ilp32s` / `base`
+| musl libc | Linux
+|`loongarch32-linux-muslsf`
 |===
 
 == C/C++ Preprocessor Built-in Macro Definitions
 
-.LoongArch-specific C/C++ Built-in Macros
+.LoongArch-specific C/C++ built-in macros
 [%header,cols="^2,^1,^3"]
 |===
 |Name
@@ -576,7 +631,7 @@ specifier, respectively.
 |Defined if the target is LoongArch.
 
 |`__loongarch_grlen`
-|`64`
+|`32` `64`
 |Bit-width of general purpose registers.
 
 |`__loongarch_frlen`
@@ -584,14 +639,14 @@ specifier, respectively.
 |Bit-width of floating-point registers (`0` if there is no FPU).
 
 |`__loongarch_arch`
-|`"loongarch64"` `"la464"` `"la664"` `"la64v1.0"` `"la64v1.1"`
+|`"loongarch64"` `"la464"` `"la664"` `"la64v1.0"` `"la64v1.1"` `"la32v1.0"` `"la32rv1.0"`
 |Target ISA preset as specified by `-march=`.
 If `-march=` is not present, an implementation-defined default value should be
 used. If `-march=native` is enabled (user-specified or the default value),
 the result is automatically detected by the compiler.
 
 |`__loongarch_tune`
-|`"generic"` `"loongarch64"` `"la464"` `"la664"`
+|`"generic"` `"loongarch64"` `"la464"` `"la664"` `"loongarch32"`
 |Processor model as specified by `-mtune` or its default value.
 If `-mtune=native` is enabled (either explicitly given or set with
 `-march=native`), the result is automatically detected by the compiler.
@@ -599,6 +654,10 @@ If `-mtune=native` is enabled (either explicitly given or set with
 |`__loongarch_lp64`
 |`1` or undefined
 |Defined if ABI uses the LP64 data model and 64-bit GPRs for parameter passing.
+
+|`__loongarch_ilp32`
+|`1` or undefined
+|Defined if ABI uses the ILP32 data model and 32-bit GPRs for parameter passing.
 
 |`__loongarch_hard_float`
 |`1` or undefined
@@ -663,7 +722,7 @@ Undefined if and only if `__loongarch_version_major` is undefined.
 The non-loongarch-specific macros listed below may also be helpful when composing
 code that need to differentiate between ABIs in an architecture-agnostic manner.
 
-.Non-LoongArch-specific C/C++ Built-in Macros
+.Non-LoongArch-specific C/C++ built-in macros related to the ABI
 [%header,cols="^1,^3"]
 |===
 |Name
@@ -722,7 +781,7 @@ The following built-in macro definitions are listed for compatibility
 with legacy code. New programs should not assume existence of these macros,
 and a conforming compiler may choose to implement none or all them.
 
-.C/C++ Built-in Macros Provided for Compatibility with Legacy Code
+.C/C++ built-in macros provided for compatibility with legacy code
 [%header,cols="^1,^1,^2"]
 |===
 |Name

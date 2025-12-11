@@ -1,4 +1,4 @@
-VERSION = 1.1
+VERSION = 1.2
 
 PDF = la-tc-v$(VERSION).pdf
 
@@ -16,7 +16,7 @@ $(PDF): $(SRC) $(IMGS) $(PDF_THEME)
 		-a compress \
 		-a date="$(DATE)" \
 		-a monthyear="$(MONTHYEAR)" \
-		-a pdf-style="$(PDF_THEME)" \
+		-a pdf-theme="$(PDF_THEME)" \
 		-a pdf-fontsdir=fonts \
 		-a imagesdir=images \
 		-v \
